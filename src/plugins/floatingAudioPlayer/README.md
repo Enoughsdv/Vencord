@@ -1,0 +1,2 @@
+# Floating Audio Player
+I know this feature is already available on mobile, but it's missing on the Desktop client, and I thought it would be helpful for some people. This plugin adds a persistent, draggable audio player for voice messages and uploaded files, meaning the audio will not stop when you switch channels or servers. It uses a custom, minimalist UI that looks native to Discord, replacing the default browser controls.

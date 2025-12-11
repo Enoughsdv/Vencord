@@ -616,6 +616,10 @@ export const Devs = /* #__PURE__*/ Object.freeze({
     vv: {
         name: "VV",
         id: 254866377087778816n
+    },
+    enoughsdv: {
+        name: "alic",
+        id: 754184329478799502n
     }
 } satisfies Record<string, Dev>);
 
