@@ -13,10 +13,17 @@ let floatingPlayer: HTMLDivElement | null = null;
 let floatingAudio: HTMLAudioElement | null = null;
 let originalAudio: HTMLAudioElement | null = null;
 let styleElement: HTMLStyleElement | null = null;
+let channelNameLabel: HTMLSpanElement | null = null;
 let wasPlaying = false;
 
 const DEBOUNCE_DELAY = 300;
 let debounceTimer: NodeJS.Timeout;
+
+const SVGs = {
+    close: '<svg width="10" height="10" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="4" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>'.trim(),
+    play: '<svg width="24" height="24" fill="#fff" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>'.trim(),
+    pause: '<svg width="24" height="24" fill="#fff" viewBox="0 0 24 24"><path d="M6 19h4V5H6zm8-14v14h4V5z"/></svg>'.trim()
+};
 
 // TODO: more styling options in settings
 function injectStyles() {
@@ -80,6 +87,13 @@ function injectStyles() {
     document.head.appendChild(styleElement);
 }
 
+function getChannelName(): string {
+    let title = document.title.trim();
+    title = title.replace(/^\(\d+\)\s*/, ""); // remove notification count - (1)
+    title = title.replace(/^Discord\s*\|\s*/, ""); // remove Discord prefix but in app doesn't usually have it - Discord |
+    return title || "audio";
+}
+
 function attachAudioListeners(audio: HTMLAudioElement) {
     if (audio.dataset.audioListener) return;
     audio.dataset.audioListener = "true";
@@ -90,7 +104,7 @@ function attachAudioListeners(audio: HTMLAudioElement) {
 
     audio.addEventListener("play", () => {
         wasPlaying = true;
-        showFloatingPlayer(src, audio);
+        showFloatingPlayer(src, audio, getChannelName());
     });
 
     audio.addEventListener("pause", () => {
@@ -117,7 +131,7 @@ function attachAudioListeners(audio: HTMLAudioElement) {
     });
 }
 
-function showFloatingPlayer(src: string, sourceAudio: HTMLAudioElement) {
+function showFloatingPlayer(src: string, sourceAudio: HTMLAudioElement, channelName: string = "Audio") {
     originalAudio = sourceAudio;
     injectStyles();
 
@@ -199,7 +213,7 @@ function showFloatingPlayer(src: string, sourceAudio: HTMLAudioElement) {
         icon.style.cssText = "font-size: 16px; filter: grayscale(0.5);";
 
         const label = document.createElement("span");
-        label.innerText = "Voice Message";
+        label.innerText = channelName;
         label.style.cssText = `
             font-size: 12px;
             font-weight: 600;
@@ -207,15 +221,14 @@ function showFloatingPlayer(src: string, sourceAudio: HTMLAudioElement) {
             letter-spacing: 0.5px;
             text-transform: uppercase;
         `;
+        channelNameLabel = label;
 
         titleGroup.appendChild(icon);
         titleGroup.appendChild(label);
         header.appendChild(titleGroup);
 
         const closeBtn = document.createElement("button");
-        closeBtn.innerHTML = `
-            <svg width="10" height="10" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="4" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
-        `;
+        closeBtn.innerHTML = SVGs.close;
 
         closeBtn.style.cssText = `
             background: rgba(255,255,255,0.1);
@@ -248,12 +261,14 @@ function showFloatingPlayer(src: string, sourceAudio: HTMLAudioElement) {
             floatingPlayer = null;
             floatingAudio = null;
             originalAudio = null;
+            channelNameLabel = null;
         });
 
         header.appendChild(closeBtn);
         floatingPlayer.appendChild(header);
 
         floatingAudio = document.createElement("audio");
+        floatingAudio.muted = true; // avoid echo/double sound
         floatingAudio.id = "floating-audio";
         floatingAudio.style.display = "none";
         floatingPlayer.appendChild(floatingAudio);
@@ -272,6 +287,8 @@ function showFloatingPlayer(src: string, sourceAudio: HTMLAudioElement) {
             align-items: center;
             gap: 8px;
         `;
+
+        // TODO: maybe add mute button with volume icon?
 
         const currentTimeSpan = document.createElement("span");
         currentTimeSpan.innerText = "0:00";
@@ -310,9 +327,7 @@ function showFloatingPlayer(src: string, sourceAudio: HTMLAudioElement) {
         `;
 
         const playPauseBtn = document.createElement("button");
-        playPauseBtn.innerHTML = `
-            <svg width="24" height="24" fill="#fff" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-        `;
+        playPauseBtn.innerHTML = SVGs.play;
 
         playPauseBtn.style.cssText = `
             background: rgba(255,255,255,0.1);
@@ -336,20 +351,18 @@ function showFloatingPlayer(src: string, sourceAudio: HTMLAudioElement) {
 
         const updatePlayPauseIcon = () => {
             if (floatingAudio?.paused) {
-                playPauseBtn.innerHTML = `
-                    <svg width="24" height="24" fill="#fff" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                `;
+                playPauseBtn.innerHTML = SVGs.play;
             } else {
-                playPauseBtn.innerHTML = `
-                    <svg width="24" height="24" fill="#fff" viewBox="0 0 24 24"><path d="M6 19h4V5H6zm8-14v14h4V5z"/></svg>
-                `;
+                playPauseBtn.innerHTML = SVGs.pause;
             }
         };
 
         playPauseBtn.addEventListener("click", () => {
             if (floatingAudio) {
-                if (floatingAudio.paused) floatingAudio.play();
-                else floatingAudio.pause();
+                if (floatingAudio.paused) {
+                    floatingAudio.muted = false;
+                    floatingAudio.play();
+                } else floatingAudio.pause();
             }
         });
 
@@ -457,6 +470,7 @@ export default definePlugin({
         const audioFiles = document.querySelectorAll("audio.audio_cf09d8") as NodeListOf<HTMLAudioElement>;
         audioFiles.forEach(attachAudioListeners);
 
+        // https://developer.mozilla.org/en-US/docs/Web/API/MutationObserver
         observer = new MutationObserver(() => {
             debounceObserverCallback();
         });
@@ -469,14 +483,22 @@ export default definePlugin({
         }
 
         FluxDispatcher.subscribe("CHANNEL_SELECT", () => {
-            console.log({ wasPlaying, floatingAudio });
             if (wasPlaying && floatingAudio && floatingAudio.src) {
-                setTimeout(() => {
-                    if (floatingAudio!.paused) {
-                        floatingAudio!.play().catch(() => { });
-                    }
+                const newChannelName = getChannelName();
+                if (channelNameLabel) {
+                    channelNameLabel.innerText = newChannelName;
+                }
 
-                    console.log("Tried to resume floating audio");
+                setTimeout(() => {
+                    if (floatingAudio) {
+                        if (!floatingPlayer) {
+                            showFloatingPlayer(floatingAudio.src, floatingAudio, newChannelName);
+                        }
+                        if (floatingAudio.paused) {
+                            floatingAudio.muted = false;
+                            floatingAudio.play().catch(() => { });
+                        }
+                    }
                 }, 1 * 1000); // 1 second delay to allow channel switch to complete - TODO: find a better way
             }
         });
@@ -491,6 +513,7 @@ export default definePlugin({
         floatingAudio = null;
         originalAudio = null;
         styleElement = null;
+        channelNameLabel = null;
         FluxDispatcher.unsubscribe("CHANNEL_SELECT", () => { });
     }
 });
